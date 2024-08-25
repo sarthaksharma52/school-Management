@@ -13,8 +13,14 @@ mongoose.connect('mongodb://localhost:27017/school_management', {
 .then(() => console.log('Connected to MongoDB'))
 .catch(err => console.error('Could not connect to MongoDB...', err));
 
-app.use(bodyParser.json());
+// Set up EJS as the view engine
+app.set('view engine', 'ejs');
+app.set('views', './views');
 
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true })); // To handle URL-encoded data
+
+// School Schema
 const schoolSchema = new mongoose.Schema({
     name: { type: String, required: true },
     address: { type: String, required: true },
@@ -24,7 +30,12 @@ const schoolSchema = new mongoose.Schema({
 
 const School = mongoose.model('School', schoolSchema);
 
-// Add School API
+// Home Route - Renders the main form page
+app.get('/', async (req, res) => {
+    res.render('index',{ schools: null });
+});
+
+// Add School API - Handles the POST request
 app.post('/addSchool', async (req, res) => {
     const { name, address, latitude, longitude } = req.body;
 
@@ -35,13 +46,13 @@ app.post('/addSchool', async (req, res) => {
     try {
         const newSchool = new School({ name, address, latitude, longitude });
         await newSchool.save();
-        res.status(201).json({ message: 'School added successfully', school: newSchool });
+        res.redirect('/'); // Redirect to the homepage after adding the school
     } catch (err) {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
 
-// List Schools API
+// List Schools API - Handles the GET request
 app.get('/listSchools', async (req, res) => {
     const { latitude, longitude } = req.query;
 
@@ -52,23 +63,24 @@ app.get('/listSchools', async (req, res) => {
     try {
         const schools = await School.find();
 
-        
+        // Calculate distance for each school
         schools.forEach(school => {
             school.distance = calculateDistance(latitude, longitude, school.latitude, school.longitude);
         });
 
+        // Sort schools by distance
         schools.sort((a, b) => a.distance - b.distance);
 
-        res.status(200).json(schools);
+        res.render('index', { schools }); // Pass the list of schools to the EJS view
     } catch (err) {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
 
+// Function to calculate the distance between two coordinates
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const toRadians = (degree) => (degree * Math.PI) / 180;
-    // Radius of the Earth in km
-    const R = 6371; 
+    const R = 6371; // Radius of the Earth in km
 
     const dLat = toRadians(lat2 - lat1);
     const dLon = toRadians(lon2 - lon1);
@@ -80,9 +92,10 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-    return R * c;
+    return R * c; // Distance in km
 }
 
+// Start the server
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });
